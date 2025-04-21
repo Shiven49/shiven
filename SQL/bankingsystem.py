@@ -1,6 +1,7 @@
 import sqlite3
 import tkinter as tk
 from tkinter import messagebox
+from datetime import datetime
 
 def connect_db():
     conn = sqlite3.connect('bank_system.db')
@@ -21,13 +22,15 @@ def create_tables():
         balance REAL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+    )
+    ''')
     conn.commit()
     conn.close()
 
 def insert_customer(first_name, last_name, email, phone, address, dob):
     conn = connect_db()
     c = conn.cursor()
+    # Check for existing customer by phone or email
     c.execute('SELECT * FROM Customers WHERE phone = ? OR email = ?', (phone, email))
     existing_customer = c.fetchone()
     if existing_customer:
@@ -66,7 +69,7 @@ def display_customers():
     return customers
 
 def search_customer():
-    search_term = entry_search.get()
+    search_term = entry_search.get().strip()
     conn = connect_db()
     c = conn.cursor()
     c.execute('''
@@ -78,8 +81,8 @@ def search_customer():
     update_customer_listbox(customers)
 
 def deposit_amount():
-    customer_id = entry_customer_id.get()
-    amount = entry_transaction_amount.get()
+    customer_id = entry_customer_id.get().strip()
+    amount = entry_transaction_amount.get().strip()
     if not customer_id or not amount:
         messagebox.showerror("Error", "Please fill in Customer ID and Amount.")
         return
@@ -94,8 +97,8 @@ def deposit_amount():
         messagebox.showerror("Error", str(e))
 
 def withdraw_amount():
-    customer_id = entry_customer_id.get()
-    amount = entry_transaction_amount.get()
+    customer_id = entry_customer_id.get().strip()
+    amount = entry_transaction_amount.get().strip()
     if not customer_id or not amount:
         messagebox.showerror("Error", "Please fill in Customer ID and Amount.")
         return
@@ -112,6 +115,8 @@ def withdraw_amount():
 def update_customer_listbox(customers):
     listbox_customers.delete(0, tk.END)
     for customer in customers:
+        # customer[7] is the balance, as per the table columns: 0=cust_id, 1=first_name, 2=last_name, 
+        # 3=email, 4=phone, 5=address, 6=dob, 7=balance, 8=created_at, 9=updated_at
         balance = float(customer[7]) if customer[7] is not None else 0.0
         listbox_customers.insert(
             tk.END,
@@ -119,13 +124,19 @@ def update_customer_listbox(customers):
         )
 
 def add_customer():
-    first_name = entry_first_name.get()
-    last_name = entry_last_name.get()
-    email = entry_email.get()
-    phone = entry_phone.get()
-    address = entry_address.get()
-    dob = entry_dob.get()
+    first_name = entry_first_name.get().strip()
+    last_name = entry_last_name.get().strip()
+    email = entry_email.get().strip()
+    phone = entry_phone.get().strip()
+    address = entry_address.get().strip()
+    dob = entry_dob.get().strip()
     if first_name and last_name and email and phone and dob:
+        # Validate date format
+        try:
+            datetime.strptime(dob, "%Y-%m-%d")
+        except ValueError:
+            messagebox.showerror("Error", "Date of Birth must be in YYYY-MM-DD format.")
+            return
         try:
             insert_customer(first_name, last_name, email, phone, address, dob)
             messagebox.showinfo("Success", "Customer added successfully!")
@@ -136,7 +147,7 @@ def add_customer():
         except sqlite3.IntegrityError:
             messagebox.showerror("Error", "This phone number or email is already registered!")
     else:
-        messagebox.showerror("Error", "All fields must be filled!")
+        messagebox.showerror("Error", "All required fields must be filled!")
 
 def clear_fields():
     entry_first_name.delete(0, tk.END)
@@ -148,9 +159,12 @@ def clear_fields():
     entry_customer_id.delete(0, tk.END)
     entry_transaction_amount.delete(0, tk.END)
 
+# -------------------------------
+# Set up the main window
 window = tk.Tk()
 window.title("Bank System - Customer Management")
 
+# Customer details
 tk.Label(window, text="First Name").grid(row=0, column=0, padx=10, pady=5)
 entry_first_name = tk.Entry(window)
 entry_first_name.grid(row=0, column=1)
@@ -178,6 +192,7 @@ entry_dob.grid(row=5, column=1)
 btn_add_customer = tk.Button(window, text="Add Customer", command=add_customer)
 btn_add_customer.grid(row=6, column=0, columnspan=2, pady=10)
 
+# Transaction details
 tk.Label(window, text="Customer ID").grid(row=7, column=0, padx=10, pady=5)
 entry_customer_id = tk.Entry(window)
 entry_customer_id.grid(row=7, column=1)
@@ -192,24 +207,20 @@ btn_deposit.grid(row=9, column=0, pady=10)
 btn_withdraw = tk.Button(window, text="Withdraw", command=withdraw_amount)
 btn_withdraw.grid(row=9, column=1, pady=10)
 
+# Search function
 tk.Label(window, text="Search Customer").grid(row=10, column=0, padx=10, pady=5)
 entry_search = tk.Entry(window)
 entry_search.grid(row=10, column=1)
 btn_search = tk.Button(window, text="Search", command=search_customer)
 btn_search.grid(row=10, column=2, padx=10, pady=5)
 
+# Display Customers list
 tk.Label(window, text="Customers").grid(row=0, column=2, padx=10, pady=5)
 listbox_customers = tk.Listbox(window, width=60, height=15)
 listbox_customers.grid(row=1, column=2, rowspan=9, padx=10, pady=5)
 
+# Create the database tables and populate the listbox on startup
 create_tables()
-def update_customer_listbox(customers):
-    listbox_customers.delete(0, tk.END)
-    for customer in customers:
-        balance = float(customer[6]) if customer[6] is not None else 0.0  # Correct index for balance
-        listbox_customers.insert(
-            tk.END,
-            f"ID: {customer[0]} | Name: {customer[1]} {customer[2]} | Email: {customer[3]} | Balance: {balance:.2f}"
-        )
+update_customer_listbox(display_customers())
 
 window.mainloop()
